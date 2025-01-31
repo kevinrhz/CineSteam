@@ -14,13 +14,13 @@ CREATE TABLE imdb_top_1000 (
     star2 VARCHAR(255),
     star3 VARCHAR(255),
     star4 VARCHAR(255),
-    no_of_votes INT,
-    gross INT
+    no_of_votes BIGINT,
+    gross BIGINT
 );
 
 CREATE TABLE steam_games (
     game_id SERIAL PRIMARY KEY,
-    steam_appid INT,
+    steam_appid BIGINT,
     name VARCHAR(255),
     developers TEXT,
     publishers TEXT,
@@ -30,11 +30,11 @@ CREATE TABLE steam_games (
     n_achievements INT,
     platforms TEXT,
     is_released BOOLEAN,
-    release_date VARCHAR(50),
+    release_date DATE,
     additional_content TEXT,
-    total_reviews INT,
-    total_positive INT,
-    total_negative INT,
+    total_reviews BIGINT,
+    total_positive BIGINT,
+    total_negative BIGINT,
     review_score NUMERIC(4,1),
     review_score_desc VARCHAR(50),
     positive_percentual NUMERIC(5,2),
@@ -42,3 +42,4 @@ CREATE TABLE steam_games (
     is_free BOOLEAN,
     price_initial NUMERIC(10,2)
 );
+
