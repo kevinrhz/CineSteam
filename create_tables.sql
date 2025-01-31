@@ -1,4 +1,44 @@
-CREATE TABLE movies (
+CREATE TABLE IF NOT EXISTS imdb_top_1000 (
     movie_id SERIAL PRIMARY KEY,
-    tital VARCHAR
-)
+    poster_link TEXT,
+    series_title VARCHAR(255),
+    released_year INT,
+    certificate VARCHAR(10),
+    runtime_min INT,
+    genre VARCHAR(255),
+    imdb_rating NUMERIC(3,1),
+    overview TEXT,
+    meta_score INT,
+    director VARCHAR(255),
+    star1 VARCHAR(255),
+    star2 VARCHAR(255),
+    star3 VARCHAR(255),
+    star4 VARCHAR(255),
+    no_of_votes INT,
+    gross INT
+);
+
+CREATE TABLE IF NOT EXISTS steam_games (
+    game_id SERIAL PRIMARY KEY,
+    steam_appid INT,
+    name VARCHAR(255),
+    developers TEXT,
+    publishers TEXT,
+    categories TEXT,
+    genres TEXT,
+    required_age INT,
+    n_achievements INT,
+    platforms TEXT,
+    is_released BOOLEAN,
+    release_date VARCHAR(50),
+    additional_content TEXT,
+    total_reviews INT,
+    total_positive INT,
+    total_negative INT,
+    review_score NUMERIC(4,1),
+    review_score_desc VARCHAR(50),
+    positive_percentual NUMERIC(5,2),
+    metacritic INT,
+    is_free BOOLEAN,
+    price_initial NUMERIC(10,2)
+);
