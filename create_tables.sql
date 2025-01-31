@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS imdb_top_1000 (
+CREATE TABLE imdb_top_1000 (
     movie_id SERIAL PRIMARY KEY,
     poster_link TEXT,
     series_title VARCHAR(255),
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS imdb_top_1000 (
     gross INT
 );
 
-CREATE TABLE IF NOT EXISTS steam_games (
+CREATE TABLE steam_games (
     game_id SERIAL PRIMARY KEY,
     steam_appid INT,
     name VARCHAR(255),
