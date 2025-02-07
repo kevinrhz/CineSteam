@@ -3,7 +3,7 @@ import psycopg2
 import ast
 
 
-# Database Connection
+# -------------------- DATABASE CONNECTION --------------------
 def connect_db():
     return psycopg2.connect(
         dbname="CineSteam",
@@ -14,21 +14,20 @@ def connect_db():
     )
 
 
-# Drop and Recreate Tables
+# -------------------- RESET DATABASE --------------------
 def reset_database(conn):
     with conn.cursor() as cur:
         with open("create_tables.sql", "r") as f:
-            sql_commands = f.read()
-        cur.execute(sql_commands)
+            cur.execute(f.read())
     conn.commit()
-    print("Database reset and tables recreated.")
+    print("✅ Database reset and tables recreated.")
 
 
-# Extract Unique Values (Genres, Developers, Publishers, Actors, Directors)
+# -------------------- EXTRACT UNIQUE VALUES --------------------
 def extract_unique_values(imdb_df, steam_df):
     genre_set, developer_set, publisher_set, director_set, actor_set, platform_set = set(), set(), set(), set(), set(), set()
 
-    # Extract from IMDB Moves
+    # Extract from IMDB Movies
     for _, row in imdb_df.iterrows():
         genre_set.update(row['Genre'].split(", ") if pd.notnull(row['Genre']) else [])
         director_set.add(row['Director'])
@@ -44,8 +43,7 @@ def extract_unique_values(imdb_df, steam_df):
     return genre_set, developer_set, publisher_set, director_set, actor_set, platform_set
 
 
-# Insert Unique Values (Genres, Developers, Publishers, Actors, Directors)
-# Batch Inserts sends all insertions in a single query per table making it much faster than the separate loops I had before
+# -------------------- INSERT UNIQUE VALUES --------------------
 def insert_unique_values(cur, genre_set, developer_set, publisher_set, director_set, actor_set, platform_set):
     cur.executemany("INSERT INTO genres (genre_name) VALUES (%s) ON CONFLICT DO NOTHING;", [(genre,) for genre in genre_set])
     cur.executemany("INSERT INTO developers (dev_name) VALUES (%s) ON CONFLICT DO NOTHING;", [(dev,) for dev in developer_set])
@@ -55,107 +53,76 @@ def insert_unique_values(cur, genre_set, developer_set, publisher_set, director_
     cur.executemany("INSERT INTO platforms (platform_name) VALUES (%s) ON CONFLICT DO NOTHING;", [(platform,) for platform in platform_set])
 
 
-# Insert IMDB Movies and their relationships
+# -------------------- INSERT MOVIES --------------------
 def insert_movies(cur, imdb_df):
     for _, row in imdb_df.iterrows():
         try:
-            # Some released_year entries mistakenly have 'Certified' data entires i.e. "G" or "PG"
-            # Ensure released_year is either INT or NULL type
-            released_year = str(row['Released_Year']).strip()
-            released_year = int(released_year) if released_year.isdigit() else None
-
-            # Convert "142 min" -> int(142)
-            runtime_min = None
-            if pd.notnull(row['Runtime']):
-                runtime_str = row['Runtime'].replace(" min", "")
-                runtime_min = int(runtime_str) if runtime_str.isdigit() else None
-            
+            # Convert data
+            released_year = int(row['Released_Year']) if str(row['Released_Year']).isdigit() else None
+            runtime_min = int(row['Runtime'].replace(" min", "")) if pd.notnull(row['Runtime']) else None
             meta_score = int(row['Meta_score']) if pd.notnull(row['Meta_score']) else None
             gross = int(row['Gross'].replace(",", "")) if pd.notnull(row['Gross']) and row['Gross'].replace(",", "").isdigit() else None
 
             # Insert Movie
             cur.execute("""
-                INSERT INTO imdb_top_1000 (
-                    poster_link, series_title, released_year, certificate, runtime_min,
-                    imdb_rating, overview, meta_score, no_of_votes, gross
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING movie_id;
-            """, (
-                row['Poster_Link'], row['Series_Title'], released_year, row['Certificate'],
-                runtime_min, row['IMDB_Rating'], row['Overview'], meta_score, row['No_of_Votes'], gross
-            ))
+                INSERT INTO imdb_top_1000 (poster_link, series_title, released_year, certificate, runtime_min,
+                                           imdb_rating, overview, meta_score, no_of_votes, gross)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING movie_id;
+            """, (row['Poster_Link'], row['Series_Title'], released_year, row['Certificate'],
+                  runtime_min, row['IMDB_Rating'], row['Overview'], meta_score, row['No_of_Votes'], gross))
+
             movie_id = cur.fetchone()[0]
 
-
-            # Link Genres
+            # Insert Movie Mappings
             for genre in row['Genre'].split(", "):
-                cur.execute("INSERT INTO movie_genres (movie_id, genre_id) SELECT %s, genre_id FROM genres WHERE genre_name = %s;", (movie_id, genre))
-
-            # Link Director
-            cur.execute("INSERT INTO movie_directors (movie_id, director_id) SELECT %s, director_id FROM directors WHERE director_name = %s;", (movie_id, row['Director']))
-
-            # Link Actors
+                cur.execute("INSERT INTO movie_genres (movie_id, genre_id) SELECT %s, genre_id FROM genres WHERE genre_name = %s ON CONFLICT DO NOTHING;", (movie_id, genre))
+            cur.execute("INSERT INTO movie_directors (movie_id, director_id) SELECT %s, director_id FROM directors WHERE director_name = %s ON CONFLICT DO NOTHING;", (movie_id, row['Director']))
             for actor in [row['Star1'], row['Star2'], row['Star3'], row['Star4']]:
-                cur.execute(
-                    """
-                    INSERT INTO movie_actors (movie_id, actor_id)
-                    SELECT %s, actor_id FROM actors WHERE actor_name = %s
-                    ON CONFLICT DO NOTHING;
-                    """,
-                    (movie_id, actor),
-                )
+                cur.execute("INSERT INTO movie_actors (movie_id, actor_id) SELECT %s, actor_id FROM actors WHERE actor_name = %s ON CONFLICT DO NOTHING;", (movie_id, actor))
 
         except Exception as e:
             conn.rollback()
-            print(f"ERROR inserting movie: {row['Series_Title']} - {e}")
-            print(f"Query values: {row['Poster_Link'], row['Series_Title'], released_year, row['Certificate'], runtime_min, row['IMDB_Rating'], row['Overview'], meta_score, row['No_of_Votes'], gross}")
-            continue
+            print(f"❌ ERROR inserting movie: {row['Series_Title']} - {e}")
 
 
-# Insert Steam Games
-def insert_games(cur, steam_df):
+# -------------------- INSERT GAMES + MAPPINGS --------------------
+def insert_games_and_mappings(cur, steam_df):
+    game_data = []
+    
     for _, row in steam_df.iterrows():
         try:
-
+            # Convert data
+            release_date = None if str(row['release_date']).lower() == "not released" else pd.to_datetime(row['release_date']).date()
             metacritic = int(row['metacritic']) if pd.notnull(row['metacritic']) else None
             price_initial = float(row['price_initial (USD)']) if pd.notnull(row['price_initial (USD)']) else None
 
-            release_date = None  # Default to None for missing values
-            if pd.notnull(row['release_date']) and row['release_date'].lower() != "not released":
-                try:
-                    release_date = pd.to_datetime(row['release_date']).date()
-                except Exception:
-                    print(f"Skipping invalid date for game: {row['name']} ({row['release_date']})")
+            # Store game data
+            game_data.append((row['steam_appid'], row['name'], row['required_age'], row['n_achievements'],
+                              row['is_released'], release_date, row['total_reviews'], row['total_positive'],
+                              row['total_negative'], row['review_score'], row['review_score_desc'],
+                              row['positive_percentual'], metacritic, row['is_free'], price_initial))
 
-
-            # Insert Game
-            cur.execute("""
-                INSERT INTO steam_games (
-                    steam_appid, name, required_age, n_achievements, is_released,
-                    release_date, total_reviews, total_positive, total_negative, 
-                    review_score, review_score_desc, positive_percentual, 
-                    metacritic, is_free, price_initial
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (steam_appid) DO NOTHING
-                RETURNING game_id;
-            """, (
-                row['steam_appid'], row['name'], row['required_age'], row['n_achievements'],
-                row['is_released'], release_date, row['total_reviews'], row['total_positive'], 
-                row['total_negative'], row['review_score'], row['review_score_desc'], 
-                row['positive_percentual'], metacritic, row['is_free'], price_initial
-            ))
-        
         except Exception as e:
-            conn.rollback()
-            print(f"ERROR inserting game: {row['name']} - {e}")
-            continue
+            print(f"❌ ERROR processing game: {row['name']} - {e}")
+
+    # Insert games
+    cur.executemany("""
+        INSERT INTO steam_games (steam_appid, name, required_age, n_achievements, is_released, release_date,
+                                total_reviews, total_positive, total_negative, review_score, review_score_desc,
+                                positive_percentual, metacritic, is_free, price_initial)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (steam_appid) DO NOTHING;
+    """, game_data)
+
+    # Debug: Print inserted game IDs
+    cur.execute("SELECT steam_appid FROM steam_games;")
+    inserted_games = cur.fetchall()
+    print(f"✅ Total Games Inserted: {len(inserted_games)}")
 
 
 
 
-
-
-
-
+# -------------------- MAIN EXECUTION --------------------
 if __name__ == "__main__":
     conn = connect_db()
     reset_database(conn)
@@ -164,16 +131,14 @@ if __name__ == "__main__":
     imdb_df = pd.read_csv("data/imdb_top_1000.csv")
     steam_df = pd.read_csv("data/steam_games.csv")
 
-    # Extract and insert unique values
     genre_set, developer_set, publisher_set, director_set, actor_set, platform_set = extract_unique_values(imdb_df, steam_df)
     insert_unique_values(cur, genre_set, developer_set, publisher_set, director_set, actor_set, platform_set)
     conn.commit()
 
-    # Insert movies and games
     insert_movies(cur, imdb_df)
-    insert_games(cur, steam_df)
+    insert_games_and_mappings(cur, steam_df)
 
     conn.commit()
     cur.close()
     conn.close()
-    print("Data successfully loaded!")
+    print("✅ Data successfully loaded!")
