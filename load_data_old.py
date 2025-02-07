@@ -95,62 +95,14 @@ def insert_movies(cur, imdb_df):
 
             # Link Actors
             for actor in [row['Star1'], row['Star2'], row['Star3'], row['Star4']]:
-                cur.execute(
-                    """
-                    INSERT INTO movie_actors (movie_id, actor_id)
-                    SELECT %s, actor_id FROM actors WHERE actor_name = %s
-                    ON CONFLICT DO NOTHING;
-                    """,
-                    (movie_id, actor),
-                )
+                cur.execute("INSERT INTO movie_actors (movie_id, actor_id) SELECT %s, actor_id FROM actors WHERE actor_name = %s;", (movie_id, actor))
+
 
         except Exception as e:
             conn.rollback()
             print(f"ERROR inserting movie: {row['Series_Title']} - {e}")
             print(f"Query values: {row['Poster_Link'], row['Series_Title'], released_year, row['Certificate'], runtime_min, row['IMDB_Rating'], row['Overview'], meta_score, row['No_of_Votes'], gross}")
             continue
-
-
-# Insert Steam Games
-def insert_games(cur, steam_df):
-    for _, row in steam_df.iterrows():
-        try:
-
-            metacritic = int(row['metacritic']) if pd.notnull(row['metacritic']) else None
-            price_initial = float(row['price_initial (USD)']) if pd.notnull(row['price_initial (USD)']) else None
-
-            release_date = None  # Default to None for missing values
-            if pd.notnull(row['release_date']) and row['release_date'].lower() != "not released":
-                try:
-                    release_date = pd.to_datetime(row['release_date']).date()
-                except Exception:
-                    print(f"Skipping invalid date for game: {row['name']} ({row['release_date']})")
-
-
-            # Insert Game
-            cur.execute("""
-                INSERT INTO steam_games (
-                    steam_appid, name, required_age, n_achievements, is_released,
-                    release_date, total_reviews, total_positive, total_negative, 
-                    review_score, review_score_desc, positive_percentual, 
-                    metacritic, is_free, price_initial
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (steam_appid) DO NOTHING
-                RETURNING game_id;
-            """, (
-                row['steam_appid'], row['name'], row['required_age'], row['n_achievements'],
-                row['is_released'], release_date, row['total_reviews'], row['total_positive'], 
-                row['total_negative'], row['review_score'], row['review_score_desc'], 
-                row['positive_percentual'], metacritic, row['is_free'], price_initial
-            ))
-        
-        except Exception as e:
-            conn.rollback()
-            print(f"ERROR inserting game: {row['name']} - {e}")
-            continue
-
-
-
 
 
 
@@ -171,7 +123,7 @@ if __name__ == "__main__":
 
     # Insert movies and games
     insert_movies(cur, imdb_df)
-    insert_games(cur, steam_df)
+    # insert_games(cur, steam_df)
 
     conn.commit()
     cur.close()
