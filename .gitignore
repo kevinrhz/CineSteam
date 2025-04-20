@@ -1,0 +1,71 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# macOS
+.DS_Store
+
+# Virtual environments
+venv/
+venv_mac/
+.env
+.env.*
+
+# Pipenv + Poetry
+Pipfile.lock
+poetry.lock
+
+# VS Code settings
+.vscode/
+
+# Logs and dumps
+*.log
+*.sqlite3
+*.dump
+
+# Compiled C extensions
+*.so
+
+# Jupyter
+.ipynb_checkpoints
+
+# PostgreSQL dumps or temp files
+*.sql
+*.psql
+
+# Test coverage
+.coverage
+htmlcov/
+
+# Migrations (optional if using Alembic/Django)
+migrations/
+
+# Pytest
+.cache
+
+# Django
+db.sqlite3
+staticfiles/
+media/
+
+# CSV / data dumps (if not versioned)
+data/*.csv
+
+# GitHub CLI auth
+.github/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# mypy
+.mypy_cache/
+
+# Bandit security tool
+.bandit
+
+# Build artifacts
+build/
+dist/
+*.egg-info
