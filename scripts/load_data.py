@@ -10,6 +10,13 @@ from core.models import Game, Movie, Genre, Developer, Publisher, Platform, Dire
 csv.field_size_limit(sys.maxsize)
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 
+BANNED_GENRES = {
+    "360 Video", "Movie", "Short", "Early Access", "Tutorial",
+    "Utilities", "Software Training", "Accounting", "Web Publishing",
+    "Photo Editing", "Audio Production", "Video Production",
+    "Design & Illustration", "Game Development"
+}
+
 def load_csv(filename):
     path = os.path.join(DATA_DIR, filename)
     with open(path, newline='', encoding='utf-8') as f:
@@ -46,10 +53,11 @@ def load_games(session):
                 genre_list = []
             for genre_name in genre_list:
                 genre_name = genre_name.strip()
-                if genre_name:
-                    genre = get_or_create(session, Genre, name=genre_name)
-                    if genre not in game.genres:
-                        game.genres.append(genre)
+                if not genre_name or genre_name in BANNED_GENRES:
+                    continue
+                genre = get_or_create(session, Genre, name=genre_name)
+                if genre not in game.genres:
+                    game.genres.append(genre)
 
             # developers
             for dev_name in row.get("developers", "").split(","):
@@ -98,10 +106,11 @@ def load_movies(session):
 
             for genre_name in row.get("Genre", "").split(","):
                 genre_name = genre_name.strip()
-                if genre_name:
-                    genre = get_or_create(session, Genre, name=genre_name)
-                    if genre not in movie.genres:
-                        movie.genres.append(genre)
+                if not genre_name or genre_name in BANNED_GENRES:
+                    continue
+                genre = get_or_create(session, Genre, name=genre_name)
+                if genre not in movie.genres:
+                    movie.genres.append(genre)
 
             for director_name in row.get("Director", "").split(","):
                 director_name = director_name.strip()
