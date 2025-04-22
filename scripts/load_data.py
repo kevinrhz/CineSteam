@@ -10,11 +10,12 @@ from core.models import Game, Movie, Genre, Developer, Publisher, Platform, Dire
 csv.field_size_limit(sys.maxsize)
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 
+# Genres that should not be added to Genre table
 BANNED_GENRES = {
-    "360 Video", "Movie", "Short", "Early Access", "Tutorial",
-    "Utilities", "Software Training", "Accounting", "Web Publishing",
-    "Photo Editing", "Audio Production", "Video Production",
-    "Design & Illustration", "Game Development"
+    "tutorial", "software training", "web publishing", "game development", "early access",
+    "free to play", "multiplayer", "massively multiplayer", "online co-op", "cross-platform multiplayer",
+    "episodic", "tv-style", "nudity", "sexual content", "gore", "video production",
+    "utilities", "photo editing", "audio production", "accounting"
 }
 
 def load_csv(filename):
@@ -45,21 +46,20 @@ def load_games(session):
             year = extract_year(row.get("release_date", ""))
             game = get_or_create(session, Game, name=row["name"], release_year=year)
 
-            # genres
             genres_raw = row.get("genres", "")
             try:
                 genre_list = ast.literal_eval(genres_raw)
             except:
                 genre_list = []
+
             for genre_name in genre_list:
-                genre_name = genre_name.strip()
+                genre_name = genre_name.strip().lower()
                 if not genre_name or genre_name in BANNED_GENRES:
                     continue
-                genre = get_or_create(session, Genre, name=genre_name)
-                if genre not in game.genres:
+                genre = session.query(Genre).filter(Genre.name.ilike(genre_name)).first()
+                if genre and genre not in game.genres:
                     game.genres.append(genre)
 
-            # developers
             for dev_name in row.get("developers", "").split(","):
                 dev_name = dev_name.strip()
                 if dev_name:
@@ -67,7 +67,6 @@ def load_games(session):
                     if dev not in game.developers:
                         game.developers.append(dev)
 
-            # publishers
             for pub_name in row.get("publishers", "").split(","):
                 pub_name = pub_name.strip()
                 if pub_name:
@@ -75,12 +74,12 @@ def load_games(session):
                     if pub not in game.publishers:
                         game.publishers.append(pub)
 
-            # platforms
             platforms_raw = row.get("platforms", "")
             try:
                 platform_list = ast.literal_eval(platforms_raw)
             except:
                 platform_list = []
+
             for plat_name in platform_list:
                 plat_name = plat_name.strip().lower()
                 if plat_name:
@@ -92,7 +91,6 @@ def load_games(session):
         except Exception as e:
             session.rollback()
             print(f"❌ Error loading game {row.get('name')}: {e}")
-
     print("✅ Steam games loaded.\n")
 
 def load_movies(session):
@@ -105,11 +103,11 @@ def load_movies(session):
             movie = get_or_create(session, Movie, title=row["Series_Title"], release_year=year)
 
             for genre_name in row.get("Genre", "").split(","):
-                genre_name = genre_name.strip()
+                genre_name = genre_name.strip().lower()
                 if not genre_name or genre_name in BANNED_GENRES:
                     continue
-                genre = get_or_create(session, Genre, name=genre_name)
-                if genre not in movie.genres:
+                genre = session.query(Genre).filter(Genre.name.ilike(genre_name)).first()
+                if genre and genre not in movie.genres:
                     movie.genres.append(genre)
 
             for director_name in row.get("Director", "").split(","):
@@ -130,12 +128,10 @@ def load_movies(session):
         except Exception as e:
             session.rollback()
             print(f"❌ Error loading movie {row.get('Series_Title')}: {e}")
-
     print("✅ IMDb movies loaded.\n")
 
 def main():
     session = SessionLocal()
-
     try:
         load_games(session)
         load_movies(session)
