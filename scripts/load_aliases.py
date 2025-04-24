@@ -1,9 +1,7 @@
 from core.db import SessionLocal
 from core.models import Genre, GenreAlias
 
-
 GENRE_ALIASES = {
-    # 1-to-1 canonical matches
     'action':        ['Action'],
     'adventure':     ['Adventure'],
     'rpg':           ['RPG'],
@@ -24,7 +22,7 @@ GENRE_ALIASES = {
     'family':        ['Family'],
     'fantasy':       ['Fantasy'],
     'sci-fi':        ['Sci-Fi'],
-    'science fiction': ['Sci-Fi'],
+    'science fiction':['Sci-Fi'],
     'animation':     ['Animation'],
     'music':         ['Music'],
     'musical':       ['Music'],
@@ -33,47 +31,47 @@ GENRE_ALIASES = {
     'history':       ['History'],
     'documentary':   ['Documentary'],
     'romance':       ['Romance'],
-
-    # Multi-mapping 
-    'biography':     ['Documentary', 'History'],
-    'film-noir':     ['Crime', 'Thriller', 'Drama'],
+    'biography':     ['Documentary','History'],
+    'film-noir':     ['Crime','Thriller','Drama'],
     'violent':       ['Action'],
-
-    # Flags (will live in alias_genres but not used in vector dims)
     'adult':         ['_FLAG_ADULT'],
     'nudity':        ['_FLAG_ADULT'],
     'sexual content':['_FLAG_ADULT'],
     'episodic':      ['_FLAG_TV'],
     'tv-style':      ['_FLAG_TV'],
     'free to play':  ['_FLAG_BUSINESS'],
-    'massively multiplayer':['_FLAG_MULTIPLAYER'],
     'multiplayer':   ['_FLAG_MULTIPLAYER'],
+    'massively multiplayer':['_FLAG_MULTIPLAYER'],
     'online co-op':  ['_FLAG_MULTIPLAYER'],
 }
 
-def normalize(raw: str) -> str:
-    """Strip quotes/brackets and lowercase."""
-    return raw.strip("[]'\" ").lower()
+def normalize(s: str) -> str:
+    return s.strip("[]'\" ").lower()
 
 def main():
     session = SessionLocal()
     try:
-        # Clear out old aliases
+        # ensure every canonical genre row exists
+        canons = {c for lst in GENRE_ALIASES.values() for c in lst if not c.startswith("_FLAG_")}
+        for c in canons:
+            session.query(Genre).filter_by(name=c).first() \
+                or session.add(Genre(name=c))
+        session.commit()
+
+        # clear old
         session.query(GenreAlias).delete()
         session.commit()
 
         added = 0
-        for raw_alias, canon_list in GENRE_ALIASES.items():
-            alias_key = normalize(raw_alias)
-            # Create a new GenreAlias row
-            ga = GenreAlias(alias=alias_key, source="both")  # or 'game'/'movie' if you split
-            # Link to each canonical Genre
+        for raw, canon_list in GENRE_ALIASES.items():
+            key = normalize(raw)
+            ga = GenreAlias(alias=key, source='both')
             for canon in canon_list:
-                genre = session.query(Genre).filter_by(name=canon).one_or_none()
-                if genre:
-                    ga.genres.append(genre)
+                g = session.query(Genre).filter_by(name=canon).one_or_none()
+                if g:
+                    ga.genres.append(g)
                 else:
-                    print(f"⚠️  Canonical genre not found: {canon}")
+                    print(f"⚠️  Canonical genre missing: {canon}")
             session.add(ga)
             added += 1
 
@@ -81,11 +79,10 @@ def main():
         print(f"✅ Inserted {added} genre aliases.")
     except Exception as e:
         session.rollback()
-        print(f"❌ Error in load_aliases: {e}")
+        print(f"❌ load_aliases error: {e}")
         raise
     finally:
         session.close()
 
-if __name__ == "__main__":
+if __name__=="__main__":
     main()
-

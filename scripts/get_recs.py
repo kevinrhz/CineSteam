@@ -1,39 +1,40 @@
-#!/usr/bin/env python
+from sqlalchemy import func
 from core.db import SessionLocal
-from core.models import Game, Movie, Recommendation
-
-def get_movie_recs_for_game(game_name: str, top_k: int = 10):
-    session = SessionLocal()
-    try:
-        game = session.query(Game).filter(Game.name.ilike(game_name)).first()
-        if not game:
-            print(f"❌ No game found matching “{game_name}”.")
-            return
-
-        print(f"\n🎮 Game: {game.name}  (ID {game.id}, {game.release_year})")
-        print(f"📽️  Top {top_k} movie recommendations:\n")
-
-        recs = (
-            session.query(Recommendation, Movie)
-                   .join(Movie, Recommendation.movie_id == Movie.id)
-                   .filter(Recommendation.game_id == game.id)
-                   .order_by(Recommendation.score.desc())
-                   .limit(top_k)
-                   .all()
-        )
-
-        for rank, (rec, movie) in enumerate(recs, start=1):
-            print(f"{rank:2d}. {movie.title} ({movie.release_year}) — score {rec.score:.3f}")
-    finally:
-        session.close()
+from core.models import Game, Recommendation, Movie
 
 def main():
-    print("Enter a Steam game name (or part of it), then ⏎ to see recs. Empty = exit.")
-    while True:
-        q = input("\nGame name → ").strip()
-        if not q:
-            break
-        get_movie_recs_for_game(q)
+    s = SessionLocal()
+    try:
+        while True:
+            q = input("\nType a game name (exact/partial), blank to exit:\n→ ").strip()
+            if not q: break
 
-if __name__ == "__main__":
+            game = s.query(Game).filter(func.lower(Game.name)==q.lower()).first()
+            if not game:
+                game = s.query(Game)\
+                        .filter(Game.name.ilike(f"%{q}%"))\
+                        .order_by(Game.release_year.desc())\
+                        .first()
+
+            if not game:
+                print(f"❌ No game matches “{q}”.")
+                continue
+
+            print(f"\n🎮  {game.name}  ({game.release_year})")
+            recs = s.query(Recommendation, Movie)\
+                    .join(Movie, Recommendation.movie_id==Movie.id)\
+                    .filter(Recommendation.game_id==game.id)\
+                    .order_by(Recommendation.score.desc())\
+                    .limit(10).all()
+
+            if not recs:
+                print("📽️  (no recommendations)")
+            else:
+                print("📽️  Top 10 movies:\n")
+                for i,(r,m) in enumerate(recs,1):
+                    print(f" {i:2d}. {m.title} ({m.release_year}) — {r.score:.3f}")
+    finally:
+        s.close()
+
+if __name__=="__main__":
     main()

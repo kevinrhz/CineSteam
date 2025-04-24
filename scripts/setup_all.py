@@ -6,6 +6,8 @@ STEPS = [
     ("load_data", "Load all games and movies"),
     ("load_aliases", "Insert canonical genre aliases"),
     ("map_flags", "Tag content with adult/multiplayer/TV flags"),
+    ("build_genre_vectors", "Build genre vectors"),
+    ("score_recommendations", "Score recommendations and populate table"),
 ]
 
 def run_step(script, label):
