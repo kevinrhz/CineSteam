@@ -1,13 +1,29 @@
 import subprocess
+import sys
 
-def run(command):
-    print(f"\n🚀 Running: {command}")
-    subprocess.run(command, shell=True)
+STEPS = [
+    ("init_db", "Initialize database"),
+    ("load_data", "Load all games and movies"),
+    ("load_aliases", "Insert canonical genre aliases"),
+    ("map_flags", "Tag content with adult/multiplayer/TV flags"),
+]
+
+def run_step(script, label):
+    print(f"\n🚀 Running: python -m scripts.{script}")
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", f"scripts.{script}"],
+            check=True
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Step '{script}' failed. Halting setup.\n")
+        sys.exit(1)
+    print(f"✅ {label} completed.")
+
+def main():
+    for script, label in STEPS:
+        run_step(script, label)
+    print("\n🎉 All setup steps completed successfully!")
 
 if __name__ == "__main__":
-    run("python -m scripts.init_db")
-    run("python -m scripts.load_data")
-    run("python -m scripts.load_aliases")
-    run("python -m scripts.map_flags")
-
-    print("\n✅ All steps completed successfully.")
+    main()

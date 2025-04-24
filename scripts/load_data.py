@@ -1,134 +1,168 @@
-import csv
-import sys
-import os
-import ast
+import logging
+logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
+
+import csv, sys, os, ast
 from dateutil.parser import parse
-from sqlalchemy.exc import IntegrityError
+from tqdm import tqdm
 from core.db import SessionLocal
-from core.models import Game, Movie, Genre, Developer, Publisher, Platform, Director, Actor
+from core.models import (
+    Game, Movie, Genre,
+    Developer, Publisher, Platform,
+    Director, Actor
+)
 
 csv.field_size_limit(sys.maxsize)
-DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
+DATA_DIR   = os.path.join(os.path.dirname(__file__), "..", "data")
+BATCH_SIZE = 500     # commit every N rows
 
-# Genres that should not be added to Genre table
+# Tags that are NOT real content genres
 BANNED_GENRES = {
-    "tutorial", "software training", "web publishing", "game development", "early access",
-    "free to play", "multiplayer", "massively multiplayer", "online co-op", "cross-platform multiplayer",
-    "episodic", "tv-style", "nudity", "sexual content", "gore", "video production",
-    "utilities", "photo editing", "audio production", "accounting"
+    "tutorial","software training","web publishing","game development",
+    "early access","free to play","multiplayer","massively multiplayer",
+    "online co-op","cross-platform multiplayer","episodic","tv-style",
+    "nudity","sexual content","gore","video production",
+    "utilities","photo editing","audio production","accounting"
 }
 
-def load_csv(filename):
-    path = os.path.join(DATA_DIR, filename)
-    with open(path, newline='', encoding='utf-8') as f:
+# ---------- helpers ----------------------------------------------------------
+def load_csv(name):
+    path = os.path.join(DATA_DIR, name)
+    with open(path, newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
 
-def get_or_create(session, model, **kwargs):
-    instance = session.query(model).filter_by(**kwargs).first()
-    if instance:
-        return instance
-    instance = model(**kwargs)
-    session.add(instance)
-    return instance
+def get_or_create(session, model, **kw):
+    obj = session.query(model).filter_by(**kw).first()
+    if not obj:
+        obj = model(**kw)
+        session.add(obj)
+    return obj
 
-def extract_year(date_str):
+def canon(name: str) -> str:
+    """Title-case / strip for canonical Genre names."""
+    return " ".join(w.capitalize() for w in name.strip().split())
+
+def extract_year(s: str) -> int:
     try:
-        return parse(date_str).year
+        return parse(s).year
     except Exception:
         return 0
+# -----------------------------------------------------------------------------
+
 
 def load_games(session):
-    print("📥 Loading Steam games...")
-    games = load_csv("steam_games.csv")
+    print("📥 Loading Steam games…")
+    rows, n = load_csv("steam_games.csv"), 0
 
-    for row in games:
+    for row in tqdm(rows, desc="Games", leave=True):
         try:
-            year = extract_year(row.get("release_date", ""))
-            game = get_or_create(session, Game, name=row["name"], release_year=year)
+            game = get_or_create(
+                session, Game,
+                name=row["name"],
+                release_year=extract_year(row.get("release_date",""))
+            )
 
-            genres_raw = row.get("genres", "")
+            # ------- genres -------
             try:
-                genre_list = ast.literal_eval(genres_raw)
-            except:
-                genre_list = []
-
-            for genre_name in genre_list:
-                genre_name = genre_name.strip().lower()
-                if not genre_name or genre_name in BANNED_GENRES:
+                raw_genres = ast.literal_eval(row.get("genres","[]"))
+            except Exception:
+                raw_genres = []
+            for g in raw_genres:
+                g_norm = g.strip().lower()
+                if not g_norm or g_norm in BANNED_GENRES:
                     continue
-                genre = session.query(Genre).filter(Genre.name.ilike(genre_name)).first()
-                if genre and genre not in game.genres:
+                genre = get_or_create(session, Genre, name=canon(g_norm))
+                if genre not in game.genres:
                     game.genres.append(genre)
 
-            for dev_name in row.get("developers", "").split(","):
-                dev_name = dev_name.strip()
-                if dev_name:
-                    dev = get_or_create(session, Developer, name=dev_name)
+            # developers
+            for dn in row.get("developers","").split(","):
+                d = dn.strip()
+                if d:
+                    dev = get_or_create(session, Developer, name=d)
                     if dev not in game.developers:
                         game.developers.append(dev)
 
-            for pub_name in row.get("publishers", "").split(","):
-                pub_name = pub_name.strip()
-                if pub_name:
-                    pub = get_or_create(session, Publisher, name=pub_name)
+            # publishers
+            for pn in row.get("publishers","").split(","):
+                p = pn.strip()
+                if p:
+                    pub = get_or_create(session, Publisher, name=p)
                     if pub not in game.publishers:
                         game.publishers.append(pub)
 
-            platforms_raw = row.get("platforms", "")
+            # platforms
             try:
-                platform_list = ast.literal_eval(platforms_raw)
-            except:
-                platform_list = []
-
-            for plat_name in platform_list:
-                plat_name = plat_name.strip().lower()
-                if plat_name:
-                    plat = get_or_create(session, Platform, name=plat_name)
+                plats = ast.literal_eval(row.get("platforms","[]"))
+            except Exception:
+                plats = []
+            for pl in plats:
+                pl_norm = pl.strip().lower()
+                if pl_norm:
+                    plat = get_or_create(session, Platform, name=pl_norm)
                     if plat not in game.platforms:
                         game.platforms.append(plat)
 
-            session.commit()
+            n += 1
+            if n % BATCH_SIZE == 0:
+                session.commit()
         except Exception as e:
             session.rollback()
             print(f"❌ Error loading game {row.get('name')}: {e}")
+
+    session.commit()
     print("✅ Steam games loaded.\n")
 
+
 def load_movies(session):
-    print("📥 Loading IMDb movies...")
-    movies = load_csv("imdb_top_1000.csv")
+    print("📥 Loading IMDb movies…")
+    rows, n = load_csv("imdb_top_1000.csv"), 0
 
-    for row in movies:
+    for row in tqdm(rows, desc="Movies", leave=True):
         try:
-            year = int(row.get("Released_Year", 0)) if row.get("Released_Year") else 0
-            movie = get_or_create(session, Movie, title=row["Series_Title"], release_year=year)
+            movie = get_or_create(
+                session, Movie,
+                title=row["Series_Title"],
+                release_year=int(row.get("Released_Year") or 0)
+            )
 
-            for genre_name in row.get("Genre", "").split(","):
-                genre_name = genre_name.strip().lower()
-                if not genre_name or genre_name in BANNED_GENRES:
+            # ------- genres -------
+            for g in row.get("Genre","").split(","):
+                g_norm = g.strip().lower()
+                if not g_norm or g_norm in BANNED_GENRES:
                     continue
-                genre = session.query(Genre).filter(Genre.name.ilike(genre_name)).first()
-                if genre and genre not in movie.genres:
+                genre = get_or_create(session, Genre, name=canon(g_norm))
+                if genre not in movie.genres:
                     movie.genres.append(genre)
 
-            for director_name in row.get("Director", "").split(","):
-                director_name = director_name.strip()
-                if director_name:
-                    director = get_or_create(session, Director, name=director_name)
+            # directors
+            for dn in row.get("Director","").split(","):
+                d = dn.strip()
+                if d:
+                    director = get_or_create(session, Director, name=d)
                     if director not in movie.directors:
                         movie.directors.append(director)
 
-            for key in ["Star1", "Star2", "Star3", "Star4"]:
-                actor_name = row.get(key, "").strip()
+            # actors
+            for key in ("Star1","Star2","Star3","Star4"):
+                actor_name = row.get(key,"").strip()
                 if actor_name:
                     actor = get_or_create(session, Actor, name=actor_name)
                     if actor not in movie.actors:
                         movie.actors.append(actor)
 
-            session.commit()
+            n += 1
+            if n % BATCH_SIZE == 0:
+                session.commit()
         except Exception as e:
             session.rollback()
             print(f"❌ Error loading movie {row.get('Series_Title')}: {e}")
+
+    session.commit()
     print("✅ IMDb movies loaded.\n")
+
+
+# -----------------------------------------------------------------------------
+
 
 def main():
     session = SessionLocal()
@@ -137,6 +171,7 @@ def main():
         load_movies(session)
     finally:
         session.close()
+
 
 if __name__ == "__main__":
     main()

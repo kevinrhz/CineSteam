@@ -1,84 +1,91 @@
 from core.db import SessionLocal
-from core.models import Genre, GenreAlias, AliasGenre
+from core.models import Genre, GenreAlias
+
 
 GENRE_ALIASES = {
-    # Single-map
-    'action': ['Action'],
-    'adventure': ['Adventure'],
-    'rpg': ['RPG'],
-    'strategy': ['Strategy'],
-    'simulation': ['Simulation'],
-    'sports': ['Sport'],
-    'sport': ['Sport'],
-    'racing': ['Sport'],
-    'casual': ['Casual'],
-    'indie': ['Indie'],
-    'horror': ['Horror'],
-    'gore': ['Horror'],
-    'thriller': ['Thriller'],
-    'mystery': ['Mystery'],
-    'crime': ['Crime'],
-    'drama': ['Drama'],
-    'comedy': ['Comedy'],
-    'family': ['Family'],
-    'fantasy': ['Fantasy'],
-    'sci-fi': ['Sci-Fi'],
+    # 1-to-1 canonical matches
+    'action':        ['Action'],
+    'adventure':     ['Adventure'],
+    'rpg':           ['RPG'],
+    'strategy':      ['Strategy'],
+    'simulation':    ['Simulation'],
+    'sports':        ['Sport'],
+    'sport':         ['Sport'],
+    'racing':        ['Sport'],
+    'casual':        ['Casual'],
+    'indie':         ['Indie'],
+    'horror':        ['Horror'],
+    'gore':          ['Horror'],
+    'thriller':      ['Thriller'],
+    'mystery':       ['Mystery'],
+    'crime':         ['Crime'],
+    'drama':         ['Drama'],
+    'comedy':        ['Comedy'],
+    'family':        ['Family'],
+    'fantasy':       ['Fantasy'],
+    'sci-fi':        ['Sci-Fi'],
     'science fiction': ['Sci-Fi'],
-    'animation': ['Animation'],
-    'music': ['Music'],
-    'musical': ['Music'],
-    'war': ['War'],
-    'western': ['Western'],
-    'history': ['History'],
-    'documentary': ['Documentary'],
-    'romance': ['Romance'],
+    'animation':     ['Animation'],
+    'music':         ['Music'],
+    'musical':       ['Music'],
+    'war':           ['War'],
+    'western':       ['Western'],
+    'history':       ['History'],
+    'documentary':   ['Documentary'],
+    'romance':       ['Romance'],
 
-    # Multi-map
-    'biography': ['Documentary', 'History'],
-    'film-noir': ['Crime', 'Thriller', 'Drama'],
-    'violent': ['Action'],
+    # Multi-mapping 
+    'biography':     ['Documentary', 'History'],
+    'film-noir':     ['Crime', 'Thriller', 'Drama'],
+    'violent':       ['Action'],
 
-    # Flags (ignored from linking to genre_id)
-    'adult': ['_FLAG_ADULT'],
-    'nudity': ['_FLAG_ADULT'],
-    'sexual content': ['_FLAG_ADULT'],
-    'episodic': ['_FLAG_TV'],
-    'tv-style': ['_FLAG_TV'],
-    'free to play': ['_FLAG_BUSINESS'],
-    'massively multiplayer': ['_FLAG_MULTIPLAYER'],
-    'multiplayer': ['_FLAG_MULTIPLAYER'],
-    'online co-op': ['_FLAG_MULTIPLAYER'],
+    # Flags (will live in alias_genres but not used in vector dims)
+    'adult':         ['_FLAG_ADULT'],
+    'nudity':        ['_FLAG_ADULT'],
+    'sexual content':['_FLAG_ADULT'],
+    'episodic':      ['_FLAG_TV'],
+    'tv-style':      ['_FLAG_TV'],
+    'free to play':  ['_FLAG_BUSINESS'],
+    'massively multiplayer':['_FLAG_MULTIPLAYER'],
+    'multiplayer':   ['_FLAG_MULTIPLAYER'],
+    'online co-op':  ['_FLAG_MULTIPLAYER'],
 }
 
-def normalize(name: str) -> str:
-    return name.strip("[]' ").lower()
+def normalize(raw: str) -> str:
+    """Strip quotes/brackets and lowercase."""
+    return raw.strip("[]'\" ").lower()
 
 def main():
     session = SessionLocal()
     try:
-        count = 0
-        for raw, canon_list in GENRE_ALIASES.items():
-            alias_entry = GenreAlias(alias=raw, source='game')  # or 'movie' if needed later
-            session.add(alias_entry)
-            session.flush()  # get alias.id
+        # Clear out old aliases
+        session.query(GenreAlias).delete()
+        session.commit()
 
-            for target in canon_list:
-                if not target.startswith("_FLAG"):
-                    genre = session.query(Genre).filter(Genre.name == target).first()
-                    if not genre:
-                        genre = Genre(name=target)
-                        session.add(genre)
-                        session.flush()
-                    session.add(AliasGenre(alias_id=alias_entry.id, genre_id=genre.id))
-                    count += 1
+        added = 0
+        for raw_alias, canon_list in GENRE_ALIASES.items():
+            alias_key = normalize(raw_alias)
+            # Create a new GenreAlias row
+            ga = GenreAlias(alias=alias_key, source="both")  # or 'game'/'movie' if you split
+            # Link to each canonical Genre
+            for canon in canon_list:
+                genre = session.query(Genre).filter_by(name=canon).one_or_none()
+                if genre:
+                    ga.genres.append(genre)
+                else:
+                    print(f"⚠️  Canonical genre not found: {canon}")
+            session.add(ga)
+            added += 1
 
         session.commit()
-        print(f"✅ Loaded {count} genre alias mappings.")
+        print(f"✅ Inserted {added} genre aliases.")
     except Exception as e:
         session.rollback()
-        print(f"❌ Error: {e}")
+        print(f"❌ Error in load_aliases: {e}")
+        raise
     finally:
         session.close()
 
 if __name__ == "__main__":
     main()
+
