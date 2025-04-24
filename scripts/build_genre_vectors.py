@@ -1,54 +1,79 @@
-import json, os
+import json
+import os
+import math
 from collections import defaultdict
 from core.db import SessionLocal
-from core.models import GenreAlias, Game, Movie
+from core.models import Game, Movie, Genre
 from sqlalchemy.orm import joinedload
 
+# where to dump vectors
 VEC_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "genre_vectors.json")
 
 def build_vectors():
     session = SessionLocal()
     try:
-        # load alias→canon
-        aliases = session.query(GenreAlias).options(joinedload(GenreAlias.genres)).all()
-        alias_map = {
-            a.alias: [g.name for g in a.genres if not g.name.startswith("_FLAG_")]
-            for a in aliases
-        }
-        # dims = sorted canon
-        dims = sorted({c for lst in alias_map.values() for c in lst})
-        idx  = {c:i for i,c in enumerate(dims)}
-        counts = defaultdict(int)
+        # 1) Load all canonical genres
+        genres = session.query(Genre).all()
+        # build a 0-based index only over unique lower-cased names
+        genre_index = {}
+        for g in genres:
+            key = g.name.strip().lower()
+            if key not in genre_index:
+                genre_index[key] = len(genre_index)
 
-        def encode(obj):
-            v = [0]*len(dims)
-            raws = [g.name.lower() for g in obj.genres]
-            for raw in raws:
-                for canon in alias_map.get(raw, []):
-                    v[idx[canon]] = 1
-                    counts[canon] += 1
-            return v
-
-        games  = session.query(Game).options(joinedload(Game.genres)).all()
+        # 2) Eager-load every game's & movie's genres
+        games = session.query(Game).options(joinedload(Game.genres)).all()
         movies = session.query(Movie).options(joinedload(Movie.genres)).all()
 
-        gv = {g.id: encode(g) for g in games}
-        mv = {m.id: encode(m) for m in movies}
+        # 3) Document frequency for each genre
+        df = defaultdict(int)
+        for obj in games + movies:
+            seen = set()
+            for g in obj.genres:
+                name = g.name.strip().lower()
+                if name in genre_index and name not in seen:
+                    df[name] += 1
+                    seen.add(name)
 
-        with open(VEC_PATH,"w") as f:
+        # 4) Compute IDF weights
+        idf = {name: 1.0 / math.log(1 + count) for name, count in df.items()}
+
+        # helper: build TF-IDF vector
+        def encode(obj):
+            vec = [0.0] * len(genre_index)
+            for g in obj.genres:
+                name = g.name.strip().lower()
+                idx = genre_index.get(name)
+                if idx is not None:
+                    vec[idx] = idf.get(name, 0.0)
+            if all(v == 0.0 for v in vec):
+                # skip if truly genreless
+                return None
+            return vec
+
+        # 5) Build and filter out None
+        game_vectors = {g.id: encode(g) for g in games}
+        game_vectors = {gid: vec for gid, vec in game_vectors.items() if vec is not None}
+
+        movie_vectors = {m.id: encode(m) for m in movies}
+        movie_vectors = {mid: vec for mid, vec in movie_vectors.items() if vec is not None}
+
+        # 6) Write out
+        with open(VEC_PATH, "w") as f:
             json.dump({
-                "genre_index": idx,
-                "game_vectors": gv,
-                "movie_vectors": mv,
-                "genre_counts": counts
+                "genre_index": genre_index,
+                "game_vectors": game_vectors,
+                "movie_vectors": movie_vectors,
+                "idf": idf
             }, f)
 
-        print(f"✅ Genre vectors saved → {VEC_PATH}")
+        print(f"✅ Genre vectors saved to {VEC_PATH}")
     except Exception as e:
         session.rollback()
-        print(f"❌ build_genre_vectors error: {e}")
+        print(f"❌ Error building genre vectors: {e}")
+        raise
     finally:
         session.close()
 
-if __name__=="__main__":
+if __name__ == "__main__":
     build_vectors()
