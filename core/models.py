@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, Integer, String, Table, ForeignKey, Float, Boolean, UniqueConstraint
+    Column, Integer, String, Text, Table, ForeignKey, Float, Boolean, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 from .db import Base
@@ -64,31 +64,34 @@ class GenreAlias(Base):
     genres = relationship('Genre', secondary=alias_genres, back_populates='aliases')
 
 class Game(Base):
-    __tablename__ = 'games'
+    __tablename__ = "games"
     id             = Column(Integer, primary_key=True)
     name           = Column(String, index=True)
     release_year   = Column(Integer)
+    steam_appid    = Column(Integer, unique=True, index=True)
+    description    = Column(Text)
     is_adult       = Column(Boolean)
     is_multiplayer = Column(Boolean)
     is_tv_format   = Column(Boolean)
 
-    genres     = relationship('Genre',    secondary=game_genres,      back_populates='raw_games')
-    developers = relationship('Developer',secondary=game_developers, back_populates='games')
-    publishers = relationship('Publisher',secondary=game_publishers, back_populates='games')
-    platforms  = relationship('Platform', secondary=game_platforms,  back_populates='games')
+    genres         = relationship("Genre", secondary="game_genres")
+    developers     = relationship("Developer", secondary="game_developers")
+    publishers     = relationship("Publisher", secondary="game_publishers")
+    platforms      = relationship("Platform", secondary="game_platforms")
 
 class Movie(Base):
-    __tablename__ = 'movies'
+    __tablename__ = "movies"
     id             = Column(Integer, primary_key=True)
     title          = Column(String, index=True)
     release_year   = Column(Integer)
+    overview       = Column(Text)
     is_adult       = Column(Boolean)
     is_multiplayer = Column(Boolean)
     is_tv_format   = Column(Boolean)
 
-    genres    = relationship('Genre',    secondary=movie_genres,    back_populates='raw_movies')
-    directors = relationship('Director', secondary=movie_directors, back_populates='movies')
-    actors    = relationship('Actor',    secondary=movie_actors,    back_populates='movies')
+    genres         = relationship("Genre", secondary="movie_genres")
+    directors      = relationship("Director", secondary="movie_directors")
+    actors         = relationship("Actor", secondary="movie_actors")
 
 class Developer(Base):
     __tablename__ = 'developers'
