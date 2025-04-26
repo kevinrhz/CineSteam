@@ -1,4 +1,5 @@
-import os, json
+import os
+import json
 from tqdm import tqdm
 from scipy import sparse
 from dotenv import load_dotenv
@@ -29,13 +30,17 @@ def main():
     G = X[: len(games)]
     M = X[len(games):]
 
+    # save sparse matrices
     sparse.save_npz(os.path.join(DATA_DIR, "game_text.npz"), G)
     sparse.save_npz(os.path.join(DATA_DIR, "movie_text.npz"), M)
 
+    # cast everything to built-in ints for JSON
+    vocab = { term: int(idx)
+              for term, idx in vectorizer.vocabulary_.items() }
     meta = {
-        "vocabulary": vectorizer.vocabulary_,
-        "game_ids":   [g.id for g in games],
-        "movie_ids":  [m.id for m in movies]
+        "vocabulary": vocab,
+        "game_ids":   [int(g.id) for g in games],
+        "movie_ids":  [int(m.id) for m in movies]
     }
     with open(os.path.join(DATA_DIR, "text_meta.json"), "w") as f:
         json.dump(meta, f)

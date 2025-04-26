@@ -4,6 +4,7 @@ logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
 import csv, sys, os, ast
 from dateutil.parser import parse
 from tqdm import tqdm
+
 from core.db import SessionLocal
 from core.models import (
     Game, Movie, Genre,
@@ -15,6 +16,7 @@ csv.field_size_limit(sys.maxsize)
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 BATCH_SIZE = 500
 
+# Genres to skip when loading
 BANNED_GENRES = {
     "tutorial","software training","web publishing","game development",
     "early access","free to play","multiplayer","massively multiplayer",
@@ -23,10 +25,12 @@ BANNED_GENRES = {
     "utilities","photo editing","audio production","accounting"
 }
 
+
 def load_csv(fn):
     path = os.path.join(DATA_DIR, fn)
     with open(path, newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
+
 
 def extract_year(s):
     try:
@@ -34,29 +38,31 @@ def extract_year(s):
     except:
         return 0
 
-def get_or_create(s, model, **kw):
-    inst = s.query(model).filter_by(**kw).first()
+
+def get_or_create(session, model, **kw):
+    inst = session.query(model).filter_by(**kw).first()
     if inst:
         return inst
     inst = model(**kw)
-    s.add(inst)
+    session.add(inst)
     return inst
+
 
 def load_raw_genres(session):
     raw_set = set()
-    # Steam
+    # Steam genres
     for r in load_csv("steam_games.csv"):
         try:
-            gl = ast.literal_eval(r.get("genres","[]"))
+            gl = ast.literal_eval(r.get("genres", "[]"))
         except:
             continue
         for raw in gl:
             n = str(raw).strip().lower()
             if n and n not in BANNED_GENRES:
                 raw_set.add(n)
-    # IMDb
+    # IMDb genres
     for r in load_csv("imdb_top_1000.csv"):
-        for raw in r.get("Genre","").split(","):
+        for raw in r.get("Genre", "").split(","):  # IMDb columns
             n = raw.strip().lower()
             if n and n not in BANNED_GENRES:
                 raw_set.add(n)
@@ -64,21 +70,26 @@ def load_raw_genres(session):
         get_or_create(session, Genre, name=name)
     session.commit()
 
+
 def load_games(session):
-    print("📥 Loading Steam games…")
+    print(" Loading Steam games…")
     rows, cnt = load_csv("steam_games.csv"), 0
     for row in tqdm(rows, desc="Games", leave=True):
         try:
-            appid = int(row.get("steam_appid") or 0)
-            year = extract_year(row.get("release_date",""))
-            # now filter/create by appid
+            # Support new CSV column 'AppID' (or fallback to 'steam_appid')
+            raw_id = row.get("AppID") or row.get("steam_appid")
+            appid = int(raw_id) if raw_id else 0
+            year = extract_year(row.get("release_date", ""))
+
             game = get_or_create(session, Game, steam_appid=appid)
-            game.name = row["name"]
+            game.name = row.get("name", "").strip()
             game.release_year = year
+            # Ingest detailed_description into description
+            game.description = row.get("detailed_description", "").strip()
 
             # genres
             try:
-                gl = ast.literal_eval(row.get("genres","[]"))
+                gl = ast.literal_eval(row.get("genres", "[]"))
             except:
                 gl = []
             for raw in gl:
@@ -90,7 +101,7 @@ def load_games(session):
                     game.genres.append(g)
 
             # developers
-            for dn in row.get("developers","").split(","):
+            for dn in row.get("developers", "").split(","):
                 dn = dn.strip()
                 if dn:
                     d = get_or_create(session, Developer, name=dn)
@@ -98,16 +109,16 @@ def load_games(session):
                         game.developers.append(d)
 
             # publishers
-            for pn in row.get("publishers","").split(","):
+            for pn in row.get("publishers", "").split(","):
                 pn = pn.strip()
                 if pn:
                     p = get_or_create(session, Publisher, name=pn)
                     if p not in game.publishers:
                         game.publishers.append(p)
 
-            # platforms
+            # platforms (old 'platforms' list; new CSV uses windows/mac/linux flags, so skip)
             try:
-                pl = ast.literal_eval(row.get("platforms","[]"))
+                pl = ast.literal_eval(row.get("platforms", "[]"))
             except:
                 pl = []
             for raw in pl:
@@ -126,18 +137,18 @@ def load_games(session):
     session.commit()
     print("✅ Steam games loaded.\n")
 
+
 def load_movies(session):
-    print("📥 Loading IMDb movies…")
+    print(" Loading IMDb movies…")
     rows, cnt = load_csv("imdb_top_1000.csv"), 0
     for row in tqdm(rows, desc="Movies", leave=True):
         try:
             year = int(row.get("Released_Year") or 0)
-            movie = get_or_create(session, Movie, title=row["Series_Title"], release_year=year)
-            # load the overview from CSV
+            movie = get_or_create(session, Movie, title=row.get("Series_Title", ""), release_year=year)
             movie.overview = row.get("Overview", "").strip()
 
-            # genres
-            for raw in row.get("Genre","").split(","):
+            # genres (IMDb)
+            for raw in row.get("Genre", "").split(","):
                 n = raw.strip().lower()
                 if not n or n in BANNED_GENRES:
                     continue
@@ -146,7 +157,7 @@ def load_movies(session):
                     movie.genres.append(g)
 
             # directors
-            for dn in row.get("Director","").split(","):
+            for dn in row.get("Director", "").split(","):
                 dn = dn.strip()
                 if dn:
                     d = get_or_create(session, Director, name=dn)
@@ -154,8 +165,8 @@ def load_movies(session):
                         movie.directors.append(d)
 
             # actors
-            for key in ["Star1","Star2","Star3","Star4"]:
-                star = row.get(key,"").strip()
+            for key in ["Star1", "Star2", "Star3", "Star4"]:
+                star = row.get(key, "").strip()
                 if star:
                     a = get_or_create(session, Actor, name=star)
                     if a not in movie.actors:
@@ -170,6 +181,7 @@ def load_movies(session):
     session.commit()
     print("✅ IMDb movies loaded.\n")
 
+
 def main():
     session = SessionLocal()
     try:
@@ -179,5 +191,5 @@ def main():
     finally:
         session.close()
 
-if __name__=="__main__":
+if __name__ == "__main__":
     main()

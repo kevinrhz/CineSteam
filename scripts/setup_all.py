@@ -4,7 +4,6 @@ import sys
 STEPS = [
     ("init_db", "Initialize database"),
     ("load_data", "Load all games and movies"),
-    ("fetch_game_description", "Fetch and store game descriptions"),
     ("load_aliases", "Insert canonical genre aliases"),
     ("map_flags", "Tag content with adult/multiplayer/TV flags"),
     ("build_genre_vectors", "Build genre-based vectors"),
