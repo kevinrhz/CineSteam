@@ -2,13 +2,14 @@ import subprocess
 import sys
 
 STEPS = [
-    ("init_db", "Initialize database"),
-    ("load_data", "Load all games and movies"),
-    ("load_aliases", "Insert canonical genre aliases"),
-    ("map_flags", "Tag content with adult/multiplayer/TV flags"),
-    ("build_genre_vectors", "Build genre-based vectors"),
+    ("init_db",            "Initialize database"),
+    ("load_data",          "Load all games and movies"),
+    ("load_aliases",       "Insert canonical genre aliases"),
+    ("map_flags",          "Tag content with adult/multiplayer/TV flags"),
+    ("build_genre_vectors","Build genre-based vectors"),
     ("build_text_vectors", "Build description-based TF-IDF vectors"),
-    ("score_recommendations", "Score recommendations and populate table"),
+    ("build_alias_map",    "Match alias keywords across all descriptions"),
+    ("score_recommendations","Score recommendations (genre + text + alias)"),
 ]
 
 def run_step(script, label):

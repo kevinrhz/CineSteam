@@ -1,0 +1,198 @@
+{
+  "western": [
+    "western",
+    "cowboy",
+    "saloon",
+    "bounty",
+    "frontier"
+  ],
+  "heist": [
+    "heist",
+    "robbery",
+    "caper",
+    "vault",
+    "loot"
+  ],
+  "zombie": [
+    "zombie",
+    "undead",
+    "infection",
+    "apocalypse",
+    "horde"
+  ],
+  "military": [
+    "military",
+    "soldier",
+    "army",
+    "battlefield",
+    "war",
+    "combat"
+  ],
+  "space": [
+    "space",
+    "alien",
+    "galaxy",
+    "starship",
+    "cosmos",
+    "planet",
+    "astronaut"
+  ],
+  "mythology": [
+    "myth",
+    "goddess",
+    "god",
+    "legend",
+    "pantheon",
+    "mythology"
+  ],
+  "religious": [
+    "religion",
+    "church",
+    "faith",
+    "priest",
+    "bible"
+  ],
+  "superhero": [
+    "superhero",
+    "cape",
+    "vigilante",
+    "powers",
+    "marvel",
+    "dc"
+  ],
+  "horror": [
+    "horror",
+    "terror",
+    "fear",
+    "haunt",
+    "demon",
+    "monster",
+    "serial killer"
+  ],
+  "thriller": [
+    "thriller",
+    "suspense",
+    "chase",
+    "danger",
+    "tension"
+  ],
+  "crime": [
+    "crime",
+    "detective",
+    "mafia",
+    "gang",
+    "underworld",
+    "noir"
+  ],
+  "mystery": [
+    "mystery",
+    "clue",
+    "investigate",
+    "whodunit"
+  ],
+  "fantasy": [
+    "fantasy",
+    "magic",
+    "dragon",
+    "wizard",
+    "spell",
+    "kingdom"
+  ],
+  "sci-fi": [
+    "sci-fi",
+    "science fiction",
+    "robot",
+    "android",
+    "cyberpunk",
+    "time travel"
+  ],
+  "adventure": [
+    "adventure",
+    "quest",
+    "explore",
+    "journey",
+    "expedition"
+  ],
+  "drama": [
+    "drama",
+    "family",
+    "conflict",
+    "emotional",
+    "relationship"
+  ],
+  "comedy": [
+    "comedy",
+    "humor",
+    "satire",
+    "parody",
+    "slapstick"
+  ],
+  "romance": [
+    "romance",
+    "love",
+    "relationship",
+    "affair",
+    "heart"
+  ],
+  "documentary": [
+    "documentary",
+    "non-fiction",
+    "true story",
+    "real life"
+  ],
+  "historical": [
+    "historical",
+    "period",
+    "ancient",
+    "empire",
+    "renaissance"
+  ],
+  "biography": [
+    "biography",
+    "biopic",
+    "memoir",
+    "life story"
+  ],
+  "musical": [
+    "musical",
+    "song",
+    "dance",
+    "band",
+    "orchestra"
+  ],
+  "war": [
+    "war",
+    "battle",
+    "soldier",
+    "army",
+    "battlefield"
+  ],
+  "supernatural": [
+    "supernatural",
+    "ghost",
+    "spirit",
+    "paranormal",
+    "occult"
+  ],
+  "political": [
+    "political",
+    "government",
+    "election",
+    "campaign",
+    "diplomacy"
+  ],
+  "sports": [
+    "sports",
+    "tournament",
+    "league",
+    "match",
+    "athlete"
+  ],
+  "crime-thriller": [
+    "crime",
+    "thriller",
+    "heist",
+    "detective",
+    "noir"
+  ]
+}
